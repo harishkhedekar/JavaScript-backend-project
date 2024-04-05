@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {apiError} from "../utils/apiError.js"
 import {User} from "../models/user.models.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import {uploadOnCloudinary, deleteOnCloudinary} from "../utils/cloudinary.js"
 import {apiResponse} from "../utils/apiResponse.js"
 import { Jwt } from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -278,15 +278,26 @@ const updateUserAvatar = asyncHandler(async(req, res) => {
         throw new apiError(400, "Error while uploading on avatar")
     }
 
-    const user = await User.findByIdAndUpdate(
+    const user = await User.findById(req.user._id).select("avatar")
+
+    const avatarToDelete = user.avatar.public_id
+
+    const updatedUser = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set:{
-                avatar: avatar.url
+                avatar: {
+                    public_id: avatar.public_id,
+                    url: avatar.secure_url
+                }
             }
         },
         {new: true}
     ).select("-password")
+
+    if (avatarToDelete && updatedUser.avatar.public_id) {
+        await deleteOnCloudinary(avatarToDelete)
+    }
 
     return res
     .status(200)
